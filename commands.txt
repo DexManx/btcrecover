@@ -1,0 +1,4 @@
+python btcrecover.py --listpass --tokenlist tokens.txt  | more
+
+python btcrecover.py --typos-delete --typos-case --typos-swap --typos 4 --typos-map typos.txt --tokenlist tokens.txt --listpass  > list0.txt
+
