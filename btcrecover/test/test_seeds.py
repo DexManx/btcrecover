@@ -68,6 +68,38 @@ def can_load_groestlcoin_hash():
 
     return is_groestlcoin_hash_loadable
 
+is_PyCryptoHDWallet_loadable = None
+def can_load_PyCryptoHDWallet():
+    global is_PyCryptoHDWallet_loadable
+    if is_PyCryptoHDWallet_loadable is None:
+        try:
+            import py_crypto_hd_wallet
+            is_PyCryptoHDWallet_loadable = True
+        except:
+            is_PyCryptoHDWallet_loadable = False
+    return is_PyCryptoHDWallet_loadable
+
+is_nacl_loadable = None
+def can_load_nacl():
+    global is_nacl_loadable
+    if is_nacl_loadable is None:
+        try:
+            import nacl.bindings
+            is_nacl_loadable = True
+        except:
+            is_nacl_loadable = False
+    return is_nacl_loadable
+
+is_bitstring_loadable = None
+def can_load_bitstring():
+    global is_bitstring_loadable
+    if is_bitstring_loadable is None:
+        try:
+            import bitstring
+            is_bitstring_loadable = True
+        except:
+            is_bitstring_loadable = False
+    return is_bitstring_loadable
 
 # Similar to unittest.skipUnless, except the first arg is a function returning a bool instead
 # of just a bool. This function isn't called until just before the test is to be run. This
@@ -342,8 +374,7 @@ class TestRecoveryFromAddress(unittest.TestCase):
             raise unittest.SkipTest("requires that hashlib implements RIPEMD-160")
 
     def address_tester(self, wallet_type, the_address, the_address_limit, correct_mnemonic, test_path=None,
-                       pathlist_file=None, addr_start_index = 0, force_p2sh = False, **kwds):
-        assert the_address_limit > 1
+                       pathlist_file=None, addr_start_index = 0, force_p2sh = False, checksinglexpubaddress = False, **kwds):
 
         if pathlist_file:
             test_path = btcrseed.load_pathlist("./derivationpath-lists/" + pathlist_file)
@@ -353,13 +384,15 @@ class TestRecoveryFromAddress(unittest.TestCase):
             wallet = wallet_type.create_from_params(addresses=[the_address],
                                                     address_limit=the_address_limit,
                                                     address_start_index=addr_start_index,
-                                                    force_p2sh=force_p2sh)
+                                                    force_p2sh=force_p2sh,
+                                                    checksinglexpubaddress=checksinglexpubaddress)
         else:
             wallet = wallet_type.create_from_params(addresses=[the_address],
                                                     address_limit=the_address_limit,
                                                     address_start_index=addr_start_index,
                                                     force_p2sh=force_p2sh,
-                                                    path=test_path)
+                                                    path=test_path,
+                                                    checksinglexpubaddress=checksinglexpubaddress)
 
         # Convert the mnemonic string into a mnemonic_ids_guess
         wallet.config_mnemonic(correct_mnemonic, **kwds)
@@ -374,16 +407,17 @@ class TestRecoveryFromAddress(unittest.TestCase):
             (wrong_mnemonic_iter.__next__(), correct_mnemonic_ids, wrong_mnemonic_iter.__next__())),
             (correct_mnemonic_ids, 2))
 
-        # Make sure the address_limit is respected (note the "the_address_limit-1" below)
-        if test_path == None:
-            wallet = wallet_type.create_from_params(addresses=[the_address], address_limit=the_address_limit - 1)
-        else:
-            wallet = wallet_type.create_from_params(addresses=[the_address], address_limit=the_address_limit - 1,
-                                                    path=test_path)
+        if the_address_limit > 1:
+            # Make sure the address_limit is respected (note the "the_address_limit-1" below)
+            if test_path == None:
+                wallet = wallet_type.create_from_params(addresses=[the_address], address_limit=the_address_limit - 1)
+            else:
+                wallet = wallet_type.create_from_params(addresses=[the_address], address_limit=the_address_limit - 1,
+                                                        path=test_path)
 
-        wallet.config_mnemonic(correct_mnemonic, **kwds)
-        self.assertEqual(wallet.return_verified_password_or_false(
-            (correct_mnemonic_ids,)), (False, 1))
+            wallet.config_mnemonic(correct_mnemonic, **kwds)
+            self.assertEqual(wallet.return_verified_password_or_false(
+                (correct_mnemonic_ids,)), (False, 1))
 
     def address_tester_cardano(self, the_address, correct_mnemonic):
 
@@ -562,6 +596,11 @@ class TestRecoveryFromAddress(unittest.TestCase):
         self.address_tester(btcrseed.WalletBIP39, "1AiAYaVJ7SCkDeNqgFz7UDecycgzb6LoT3", 2,
                             "certain come keen collect slab gauge photo inside mechanic deny leader drop",
                             ["m/44'/0'/0'/0"])
+
+    def test_bip44_addr_TerraLuna(self):
+        self.address_tester(btcrseed.WalletBIP39, "terra1negkjtkr6wu2uzcwcuz0kj8w4z64uax3w0dv5u", 2,
+                            "earth jelly weapon word focus shaft danger cruel inflict strong palace barrel peace strike timber orbit orphan tower size series scatter kiwi fat filter",
+                            ["m/44'/330'/0'/0"])
 
     def test_bip44_addr_BTC_multi_coin_derivationpaths(self):
         self.address_tester(btcrseed.WalletBIP39, "1AiAYaVJ7SCkDeNqgFz7UDecycgzb6LoT3", 2,
@@ -828,6 +867,62 @@ class TestRecoveryFromAddress(unittest.TestCase):
     def test_walletbch(self):
         self.address_tester(btcrseed.WalletBCH, "bitcoincash:qz7753xzek843j50cgtc526wdmlpm5v5eyt92gznrt", 2,
                             "certain come keen collect slab gauge photo inside mechanic deny leader drop")
+
+    def test_mybitcoinwallet_single_legacy(self):
+        self.address_tester(wallet_type = btcrseed.WalletBIP39,
+                            the_address = "1EaGSR7uWp2hok3jTtNypjUuV3G4YyMxgt",
+                            the_address_limit = 1,
+                            correct_mnemonic = "spatial stereo thrive reform shallow blouse minimum foster eagle game answer worth size stumble theme crater bounce stay extra duty man weather awesome search",
+                            checksinglexpubaddress = True)
+
+    def test_mybitcoinwallet_single_bech32(self):
+        self.address_tester(wallet_type = btcrseed.WalletBIP39,
+                            the_address = "bc1qymj3j8qkyk8ukhczg80tm0jyfh4rzxyqnngsqh",
+                            the_address_limit = 1,
+                            correct_mnemonic = "spatial stereo thrive reform shallow blouse minimum foster eagle game answer worth size stumble theme crater bounce stay extra duty man weather awesome search",
+                            checksinglexpubaddress = True)
+
+    @skipUnless(can_load_PyCryptoHDWallet, "requires Py_Crypto_HD_Wallet module")
+    def test_WalletPyCryptoHDWallet_Tron(self):
+        self.address_tester(btcrseed.WalletTron, "TLDrhbxkBGa1doxtez2bEx4iQ3DmKg9UdM", 2,
+                            "have hint welcome skate cinnamon rabbit cable payment gift uncover column duck scissors wedding decorate under marine hurry scrub rapid change roast print arch")
+
+    @skipUnless(can_load_PyCryptoHDWallet, "requires Py_Crypto_HD_Wallet module")
+    def test_WalletPyCryptoHDWallet_Cosmos(self):
+        self.address_tester(btcrseed.WalletCosmos, "cosmos1t47f66q50ft66ypwn9x7laeectyvh23aqedfmq", 1,
+                            "doctor giant eternal huge improve suit service poem logic dynamic crane summer exhibit describe later suit dignity ahead unknown fall syrup mirror nurse season")
+
+    @skipUnless(can_load_PyCryptoHDWallet, "requires Py_Crypto_HD_Wallet module")
+    def test_WalletPyCryptoHDWallet_Avalanche(self):
+        self.address_tester(btcrseed.WalletAvalanche, "X-avax1mpf7j47w7t3xt32g3vzm0zvzy35d7t5twv2ax3", 2,
+                            "have hint welcome skate cinnamon rabbit cable payment gift uncover column duck scissors wedding decorate under marine hurry scrub rapid change roast print arch")
+
+    @skipUnless(can_load_PyCryptoHDWallet, "requires Py_Crypto_HD_Wallet module")
+    def test_WalletPyCryptoHDWallet_Solana(self):
+        self.address_tester(btcrseed.WalletSolana, "HDnS8HELzQ4oef1TLzxyifhiWgmnWALvJXBjkva9JMyU", 2,
+                            "have hint welcome skate cinnamon rabbit cable payment gift uncover column duck scissors wedding decorate under marine hurry scrub rapid change roast print arch")
+
+    @skipUnless(can_load_PyCryptoHDWallet, "requires Py_Crypto_HD_Wallet module")
+    def test_WalletPyCryptoHDWallet_Stellar(self):
+        self.address_tester(btcrseed.WalletStellar, "GAV7E2PHIPDS3PM3BWN6DIHC623ONTZUDGXPJ7TT3EREYJRLTMENCK6Z", 2,
+                            "doctor giant eternal huge improve suit service poem logic dynamic crane summer exhibit describe later suit dignity ahead unknown fall syrup mirror nurse season")
+
+    @skipUnless(can_load_PyCryptoHDWallet, "requires Py_Crypto_HD_Wallet module")
+    def test_WalletPyCryptoHDWallet_PolkadotSubstrate(self):
+        self.address_tester(btcrseed.WalletPolkadotSubstrate, "13SsWBQSN6Se72PCaMa6huPXEosRNUXN3316yAycS6rpy3tK", 1,
+                            "toilet assume drama keen dust warrior stick quote palace imitate music disease")
+
+    @skipUnless(can_load_nacl, "requires nacl module")
+    @skipUnless(can_load_bitstring, "requires bitstring module")
+    def test_Helium_mobile(self):
+        self.address_tester(btcrseed.WalletHelium, "13hP2Vb1XVcMYrVNdwUW4pF3ZDj8CnET92zzUHqYp7DxxzVASbB", 1,
+                            "arm hundred pride female steel describe tip physical weapon peace write advice")
+
+    @skipUnless(can_load_nacl, "requires nacl module")
+    @skipUnless(can_load_bitstring, "requires bitstring module")
+    def test_Helium_bip39(self):
+        self.address_tester(btcrseed.WalletHelium, "14qWwWH3JZcYkqvbmziU4J12nKQPabp5GkKUmmZi4n94YQ7LbwS", 1,
+                            "rather ensure noble bargain armor hold embody friend ahead senior earth result")
 
     # Test to ensure that bundled derivation path files work correctly
     def test_pathfile_BTC_Electrum_Legacy(self):

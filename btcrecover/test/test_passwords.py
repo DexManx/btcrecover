@@ -247,6 +247,26 @@ class Test01Basics(GeneratorTester):
             ["twoone", "onetwo", "threeone", "onethree", "threetwo", "twothree"],
             "--min-tokens 2 --max-tokens 2")
 
+    def test_truncate(self):
+        self.do_generator_test(["one", "two", "three"],
+            ["o", "t"],
+            "--truncate-length 1")
+
+    def test_password_repeats_postypos(self):
+        self.do_generator_test(["aa"],
+            ["aa", "aaaa", "Xa", "XaXa", "aX", "aXaX"],
+            "--password-repeats-posttypos --typos-replace X")
+
+    def test_password_repeats_pretypos(self):
+        self.do_generator_test(["aa"],
+            ["aa", "Xa", "aX", "aaaa", "Xaaa", "aXaa", "aaXa", "aaaX"],
+            "--password-repeats-pretypos --typos-replace X")
+
+    def test_password_repeats_x3(self):
+        self.do_generator_test(["one"],
+            ["one", "oneone", "oneoneone"],
+            "--password-repeats-posttypos --max-password-repeats 3")
+
     def test_empty_file(self):
         self.do_generator_test([], [], test_passwordlist=True)
     def test_one_char_file(self):
@@ -979,6 +999,17 @@ def can_load_ecdsa():
             is_ecdsa_loadable = False
     return is_ecdsa_loadable
 
+is_bitcoinutils_loadable = None
+def can_load_bitcoinutils():
+    global is_bitcoinutils_loadable
+    if is_bitcoinutils_loadable is None:
+        try:
+            import bitcoinutils
+            is_bitcoinutils_loadable = True
+        except ImportError:
+            is_bitcoinutils_loadable = False
+    return is_bitcoinutils_loadable
+
 is_eth_keyfile_loadable = None
 def can_load_eth_keyfile():
     global is_eth_keyfile_loadable
@@ -1000,6 +1031,28 @@ def can_load_leveldb():
         except:
             is_leveldb_loadable = False
     return is_leveldb_loadable
+
+is_PyCryptoHDWallet_loadable = None
+def can_load_PyCryptoHDWallet():
+    global is_PyCryptoHDWallet_loadable
+    if is_PyCryptoHDWallet_loadable is None:
+        try:
+            import py_crypto_hd_wallet
+            is_PyCryptoHDWallet_loadable = True
+        except:
+            is_PyCryptoHDWallet_loadable = False
+    return is_PyCryptoHDWallet_loadable
+
+is_ShamirMnemonic_loadable = None
+def can_load_ShamirMnemonic():
+    global is_ShamirMnemonic_loadable
+    if is_ShamirMnemonic_loadable is None:
+        try:
+            import shamir_mnemonic
+            is_ShamirMnemonic_loadable = True
+        except:
+            is_ShamirMnemonic_loadable = False
+    return is_ShamirMnemonic_loadable
 
 # Wrapper for btcrpass.init_worker() which clears btcrpass.loaded_wallet to simulate the way
 # multiprocessing works on Windows (even on other OSs) and permits pure python library testing
@@ -1301,6 +1354,21 @@ class Test07WalletDecryption(unittest.TestCase):
     def test_dogechain_info_cpu(self):
         self.wallet_tester("dogechain.wallet.aes.json")
 
+    @skipUnless(can_load_ecdsa, "requires ECDSA")
+    @skipUnless(can_load_bitcoinutils,  "requires Bitcoin-Utils")
+    def test_block_io_privkeyrequest_data_legacy_cpu(self):
+        self.wallet_tester("block.io.request.legacy.json", correct_pass="Anhday12")
+
+    @skipUnless(can_load_ecdsa, "requires ECDSA")
+    @skipUnless(can_load_bitcoinutils,  "requires Bitcoin-Utils")
+    def test_block_io_privkeyrequest_data_cpu(self):
+        self.wallet_tester("block.io.request.json", correct_pass="btcrtestpassword2022")
+
+    @skipUnless(can_load_ecdsa, "requires ECDSA")
+    @skipUnless(can_load_bitcoinutils,  "requires Bitcoin-Utils")
+    def test_block_io_pinchange_data_cpu(self):
+        self.wallet_tester("block.io.change.json", correct_pass="btcrtestpassword2022")
+
     @skipUnless(can_load_leveldb, "Unable to load LevelDB module, requires Python 3.8+")
     def test_metamask_leveldb_chrome_cpu(self):
         self.wallet_tester("metamask/nkbihfbeogaeaoehlefnkodbefgpgknn")
@@ -1566,6 +1634,50 @@ class Test08BIP39Passwords(unittest.TestCase):
         pool.close()
         pool.join()
 
+    def WalletPyCryptoHDWallet_tester(self, correct_pass = "btcr-test-password", *args, **kwargs):
+
+        wallet = btcrpass.WalletPyCryptoHDWallet(*args, **kwargs)
+
+        # Perform the tests in the current process
+        self.assertEqual(wallet._return_verified_password_or_false_cpu(
+            (tstr("btcr-wrong-password-1"), tstr("btcr-wrong-password-2"))), (False, 2))
+        self.assertEqual(wallet._return_verified_password_or_false_cpu(
+            (tstr("btcr-wrong-password-3"), correct_pass, tstr("btcr-wrong-password-4"))), (correct_pass, 2))
+
+        # Perform the tests in a child process to ensure the wallet can be pickled and all libraries reloaded
+        wallet.opencl = False
+        pool = multiprocessing.Pool(1, init_worker, (wallet, tstr, False, False))
+        password_found_iterator = pool.imap(btcrpass.return_verified_password_or_false,
+            ( ( tstr("btcr-wrong-password-1"), tstr("btcr-wrong-password-2") ),
+              ( tstr("btcr-wrong-password-3"), correct_pass, tstr("btcr-wrong-password-4") ) ))
+        self.assertEqual(password_found_iterator.__next__(), (False, 2))
+        self.assertEqual(password_found_iterator.__next__(), (correct_pass, 2))
+        self.assertRaises(StopIteration, password_found_iterator.next)
+        pool.close()
+        pool.join()
+
+    def WalletSLIP39_tester(self, correct_pass = "btcr-test-password", *args, **kwargs):
+
+        wallet = btcrpass.WalletSLIP39(*args, **kwargs)
+
+        # Perform the tests in the current process
+        self.assertEqual(wallet._return_verified_password_or_false_cpu(
+            (tstr("btcr-wrong-password-1"), tstr("btcr-wrong-password-2"))), (False, 2))
+        self.assertEqual(wallet._return_verified_password_or_false_cpu(
+            (tstr("btcr-wrong-password-3"), correct_pass, tstr("btcr-wrong-password-4"))), (correct_pass, 2))
+
+        # Perform the tests in a child process to ensure the wallet can be pickled and all libraries reloaded
+        wallet.opencl = False
+        pool = multiprocessing.Pool(1, init_worker, (wallet, tstr, False, False))
+        password_found_iterator = pool.imap(btcrpass.return_verified_password_or_false,
+            ( ( tstr("btcr-wrong-password-1"), tstr("btcr-wrong-password-2") ),
+              ( tstr("btcr-wrong-password-3"), correct_pass, tstr("btcr-wrong-password-4") ) ))
+        self.assertEqual(password_found_iterator.__next__(), (False, 2))
+        self.assertEqual(password_found_iterator.__next__(), (correct_pass, 2))
+        self.assertRaises(StopIteration, password_found_iterator.next)
+        pool.close()
+        pool.join()
+
     def cardano_tester_opencl(self, *args, **kwargs):
 
         wallet = btcrpass.WalletCardano(*args, **kwargs)
@@ -1600,6 +1712,63 @@ class Test08BIP39Passwords(unittest.TestCase):
     #         mnemonic=   "wood blame garbage one federal jaguar slogan movie thunder seed apology trigger spoon depth basket fine culture boil render special enforce dish middle antique"
     #     )
 
+    @skipUnless(can_load_PyCryptoHDWallet, "requires Py_Crypto_HD_Wallet module")
+    def test_address_PyCryptoHDWallet_solana(self):
+        self.WalletPyCryptoHDWallet_tester(
+            wallet_type="solana",
+            address_limit=1,
+            addresses=  ["8rYAgtkMvM1GmhLUTksAyEYyxC3ckwyGG7747FHFsn3y"],
+            mnemonic=   "have hint welcome skate cinnamon rabbit cable payment gift uncover column duck scissors wedding decorate under marine hurry scrub rapid change roast print arch"
+        )
+
+    @skipUnless(can_load_PyCryptoHDWallet, "requires Py_Crypto_HD_Wallet module")
+    def test_address_PyCryptoHDWallet_tron(self):
+        self.WalletPyCryptoHDWallet_tester(
+            wallet_type="tron",
+            address_limit=1,
+            addresses=  ["TGvJrj5D8qdzhcppg9RoLdfbEjDYCne8xc"],
+            mnemonic=   "have hint welcome skate cinnamon rabbit cable payment gift uncover column duck scissors wedding decorate under marine hurry scrub rapid change roast print arch"
+        )
+
+    @skipUnless(can_load_PyCryptoHDWallet, "requires Py_Crypto_HD_Wallet module")
+    def test_address_PyCryptoHDWallet_cosmos(self):
+        self.WalletPyCryptoHDWallet_tester(
+            wallet_type="cosmos",
+            address_limit=1,
+            addresses=  ["cosmos1djx4wh8zc9wdk5cwe3lawpmh0j4nsekej6mk9k"],
+            mnemonic=   "doctor giant eternal huge improve suit service poem logic dynamic crane summer exhibit describe later suit dignity ahead unknown fall syrup mirror nurse season"
+        )
+
+
+    @skipUnless(can_load_PyCryptoHDWallet, "requires Py_Crypto_HD_Wallet module")
+    def test_address_PyCryptoHDWallet_stellar(self):
+        self.WalletPyCryptoHDWallet_tester(
+            wallet_type="stellar",
+            address_limit=2,
+            addresses=  ["GBPYX2ELQ6YTAF7DXER7RCQJR2HXXFX6HUZKWEZD3B6RKOLDSJF7UGXK"],
+            mnemonic=   "doctor giant eternal huge improve suit service poem logic dynamic crane summer exhibit describe later suit dignity ahead unknown fall syrup mirror nurse season"
+        )
+
+    @skipUnless(can_load_PyCryptoHDWallet, "requires Py_Crypto_HD_Wallet module")
+    def test_address_PyCryptoHDWallet_avalanche(self):
+        self.WalletPyCryptoHDWallet_tester(
+            wallet_type="avalanche",
+            address_limit=1,
+            addresses=  ["X-avax170r6a4nwudym6tx494nxgdatpep2gvpm40h4tg"],
+            mnemonic=   "have hint welcome skate cinnamon rabbit cable payment gift uncover column duck scissors wedding decorate under marine hurry scrub rapid change roast print arch"
+        )
+
+    @skipUnless(can_load_PyCryptoHDWallet, "requires Py_Crypto_HD_Wallet module")
+    def test_address_PyCryptoHDWallet_polkadotsubstrate(self):
+        self.WalletPyCryptoHDWallet_tester(
+            path = ["//hard/soft"],
+            correct_pass = "btcr-test-password",
+            wallet_type="polkadotsubstrate",
+            address_limit=1,
+            addresses=  ["12uMBgecqfkHTYZE4GFRx847CwR7sfs2bTdPbPLpzeMDGFwC"],
+            mnemonic=   "toilet assume drama keen dust warrior stick quote palace imitate music disease"
+        )
+
     @skipUnless(has_any_opencl_devices, "requires OpenCL and a compatible device")
     def test_address_cardano_ledger_opencl(self):
         self.cardano_tester_opencl(
@@ -1621,6 +1790,28 @@ class Test08BIP39Passwords(unittest.TestCase):
     #         mnemonic=   "wood blame garbage one federal jaguar slogan movie thunder seed apology trigger spoon depth basket fine culture boil render special enforce dish middle antique"
     #     )
 
+
+    @skipUnless(can_load_ShamirMnemonic, "requires Shamir-Mnemonic module")
+    def test_address_SLIP39_BTC(self):
+        self.WalletSLIP39_tester(
+            correct_pass = "btcr-test-password",
+            wallet_type="bip39",
+            address_limit=2,
+            addresses=  ["bc1q76szkxz4cta5p5s66muskvads0nhwe5m5w07pq"],
+            slip39_shares =   ["hearing echo academic acid deny bracelet playoff exact fancy various evidence standard adjust muscle parcel sled crucial amazing mansion losing",
+                               "hearing echo academic agency deliver join grant laden index depart deadline starting duration loud crystal bulge gasoline injury tofu together"]
+        )
+
+    @skipUnless(can_load_ShamirMnemonic, "requires Shamir-Mnemonic module")
+    def test_address_SLIP39_ETH(self):
+        self.WalletSLIP39_tester(
+            correct_pass = "btcr-test-password",
+            wallet_type="ethereum",
+            address_limit=2,
+            addresses=  ["0x0Ef61684B1E671dcBee4D51646cA6247487Ef91a"],
+            slip39_shares =   ["hearing echo academic acid deny bracelet playoff exact fancy various evidence standard adjust muscle parcel sled crucial amazing mansion losing",
+                               "hearing echo academic agency deliver join grant laden index depart deadline starting duration loud crystal bulge gasoline injury tofu together"]
+        )
 
     @skipUnless(can_load_coincurve, "requires coincurve")
     def test_bip39_mpk(self):
@@ -1678,6 +1869,16 @@ class Test08BIP39Passwords(unittest.TestCase):
             addresses=     ["bc1qj7najywjcjwd7ccn7kmeh3ckccwrslnrqrlnm7"],
             address_limit= 5,
             mnemonic=      "certain come keen collect slab gauge photo inside mechanic deny leader drop"
+        )
+
+    @skipUnless(can_load_coincurve, "requires coincurve")
+    @skipUnless(has_ripemd160,      "requires that hashlib implements RIPEMD-160")
+    def test_address_bitcoin_mybitcoinwallet_single(self):
+        self.bip39_tester(
+            addresses=     ["1NLcraWZhG3wFBYX2zwkKwYztL6yyhJG32"],
+            address_limit= 1,
+            mnemonic = "spatial stereo thrive reform shallow blouse minimum foster eagle game answer worth size stumble theme crater bounce stay extra duty man weather awesome search",
+            checksinglexpubaddress = True
         )
 
     @skipUnless(can_load_coincurve, "requires coincurve")
@@ -2616,6 +2817,107 @@ class Test12BrainwalletDecryption(unittest.TestCase):
                                     salt="btcr-test-password",
                                     crypto = "litecoin",
                                     check_compressed=False)
+
+# Raw Private Key Wallets
+class Test13RawPrivateKeyRecovery(unittest.TestCase):
+    def test_rawprivatekey_Eth(self):
+        wallet = btcrpass.WalletRawPrivateKey(addresses=['0xB9644424F9E639D1D0F27C4897e696CC324948BB'],
+                                            check_compressed=True,
+                                            check_uncompressed=True,
+                                            force_check_p2sh=False,
+                                            crypto='ethereum')
+
+        correct_pw = tstr("5db77aa7aea5ea7d6b4c64dab219972cf4763d4937d3e6e17f580436dcb10d33")
+
+        self.assertEqual(wallet.return_verified_password_or_false(
+            (tstr("5db77aa7aea5ea7d6b4c64dab219972cf4763d4937d3e6e17f580436dcb10d34"), tstr("5db77aa7aea5ea7d6b4c64dab219972cf4763d4937d3e6e17f580436dcb10d35"))), (False, 2))
+        self.assertEqual(wallet.return_verified_password_or_false(
+            (tstr("5db77aa7aea5ea7d6b4c64dab219972cf4763d4937d3e6e17f580436dcb10d36"), correct_pw, tstr("5db77aa7aea5ea7d6b4c64dab219972cf4763d4937d3e6e17f580436dcb10d37"))), (correct_pw, 2))
+
+    def test_rawprivatekey_Btc_legacy_Hex_Compressed(self):
+        wallet = btcrpass.WalletRawPrivateKey(addresses=['1KoHUH6vf9MGRvooN7bHqrWghDqKc566tB'],
+                                            check_compressed=True,
+                                            check_uncompressed=True,
+                                            force_check_p2sh=False,
+                                            crypto='bitcoin')
+
+        correct_pw = tstr("1ADF94484E9C820D69BC9770542B678DB677E7C354DC4BD27D7E9AC351698CB7")
+
+        self.assertEqual(wallet.return_verified_password_or_false(
+            (tstr("5db77aa7aea5ea7d6b4c64dab219972cf4763d4937d3e6e17f580436dcb10d34"), tstr("5db77aa7aea5ea7d6b4c64dab219972cf4763d4937d3e6e17f580436dcb10d35"))), (False, 2))
+        self.assertEqual(wallet.return_verified_password_or_false(
+            (tstr("5db77aa7aea5ea7d6b4c64dab219972cf4763d4937d3e6e17f580436dcb10d36"), correct_pw, tstr("5db77aa7aea5ea7d6b4c64dab219972cf4763d4937d3e6e17f580436dcb10d37"))), (correct_pw, 2))
+
+    def test_rawprivatekey_Btc_legacy_Hex_Uncompressed(self):
+        wallet = btcrpass.WalletRawPrivateKey(addresses=['1N8pQZkmrKjzSwuYFzThiMr8Ceg2mX4tAo'],
+                                            check_compressed=True,
+                                            check_uncompressed=True,
+                                            force_check_p2sh=False,
+                                            crypto='bitcoin')
+
+        correct_pw = tstr("1ADF94484E9C820D69BC9770542B678DB677E7C354DC4BD27D7E9AC351698CB7")
+
+        self.assertEqual(wallet.return_verified_password_or_false(
+            (tstr("5db77aa7aea5ea7d6b4c64dab219972cf4763d4937d3e6e17f580436dcb10d34"), tstr("5db77aa7aea5ea7d6b4c64dab219972cf4763d4937d3e6e17f580436dcb10d35"))), (False, 2))
+        self.assertEqual(wallet.return_verified_password_or_false(
+            (tstr("5db77aa7aea5ea7d6b4c64dab219972cf4763d4937d3e6e17f580436dcb10d36"), correct_pw, tstr("5db77aa7aea5ea7d6b4c64dab219972cf4763d4937d3e6e17f580436dcb10d37"))), (correct_pw, 2))
+
+    def test_rawprivatekey_Btc_p2sh_Hex_Compressed(self):
+        wallet = btcrpass.WalletRawPrivateKey(addresses=['3AZyE1Dobb71DWjvYtSNqwNELPGQhdjqp4'],
+                                            check_compressed=True,
+                                            check_uncompressed=False,
+                                            force_check_p2sh=True,
+                                            crypto='bitcoin')
+
+        correct_pw = tstr("1ADF94484E9C820D69BC9770542B678DB677E7C354DC4BD27D7E9AC351698CB7")
+
+        self.assertEqual(wallet.return_verified_password_or_false(
+            (tstr("5db77aa7aea5ea7d6b4c64dab219972cf4763d4937d3e6e17f580436dcb10d34"), tstr("5db77aa7aea5ea7d6b4c64dab219972cf4763d4937d3e6e17f580436dcb10d35"))), (False, 2))
+        self.assertEqual(wallet.return_verified_password_or_false(
+            (tstr("5db77aa7aea5ea7d6b4c64dab219972cf4763d4937d3e6e17f580436dcb10d36"), correct_pw, tstr("5db77aa7aea5ea7d6b4c64dab219972cf4763d4937d3e6e17f580436dcb10d37"))), (correct_pw, 2))
+
+    def test_rawprivatekey_Btc_nativesegwit_Hex_Compressed(self):
+        wallet = btcrpass.WalletRawPrivateKey(addresses=['bc1qecejtf3csl8gmjxvjmh0mwtqah8z7eetrcay67'],
+                                            check_compressed=True,
+                                            check_uncompressed=True,
+                                            force_check_p2sh=False,
+                                            crypto='bitcoin')
+
+        correct_pw = tstr("1ADF94484E9C820D69BC9770542B678DB677E7C354DC4BD27D7E9AC351698CB7")
+
+        self.assertEqual(wallet.return_verified_password_or_false(
+            (tstr("5db77aa7aea5ea7d6b4c64dab219972cf4763d4937d3e6e17f580436dcb10d34"), tstr("5db77aa7aea5ea7d6b4c64dab219972cf4763d4937d3e6e17f580436dcb10d35"))), (False, 2))
+        self.assertEqual(wallet.return_verified_password_or_false(
+            (tstr("5db77aa7aea5ea7d6b4c64dab219972cf4763d4937d3e6e17f580436dcb10d36"), correct_pw, tstr("5db77aa7aea5ea7d6b4c64dab219972cf4763d4937d3e6e17f580436dcb10d37"))), (correct_pw, 2))
+
+    def test_rawprivatekey_Btc_legacy_WIF_Uncompressed(self):
+        wallet = btcrpass.WalletRawPrivateKey(addresses=['1EDrqbJMVwjQ2K5avN3627NcAXyWbkpGBL'],
+                                            check_compressed=False,
+                                            check_uncompressed=True,
+                                            force_check_p2sh=False,
+                                            crypto='bitcoin')
+
+        correct_pw = tstr("5JYsdUthE1KzGAUXwfomeocw6vwzoTNXzcbJq9e7LcAyt1Svoo8")
+
+        self.assertEqual(wallet.return_verified_password_or_false(
+            (tstr("5db77aa7aea5ea7d6b4c64dab219972cf4763d4937d3e6e17f580436dcb10d34"), tstr("5db77aa7aea5ea7d6b4c64dab219972cf4763d4937d3e6e17f580436dcb10d35"))), (False, 2))
+        self.assertEqual(wallet.return_verified_password_or_false(
+            (tstr("5db77aa7aea5ea7d6b4c64dab219972cf4763d4937d3e6e17f580436dcb10d36"), correct_pw, tstr("5db77aa7aea5ea7d6b4c64dab219972cf4763d4937d3e6e17f580436dcb10d37"))), (correct_pw, 2))
+
+    def test_rawprivatekey_Btc_legacy_WIF_Compressed(self):
+        wallet = btcrpass.WalletRawPrivateKey(addresses=['1NMnWwgsaLaV97m3Z3PAkCvAyJqdVKHnEE'],
+                                            check_compressed=True,
+                                            check_uncompressed=False,
+                                            force_check_p2sh=False,
+                                            crypto='bitcoin')
+
+        correct_pw = tstr("KzTgU27AYQSojvpXaJHS5rmboB7k83Q3oCDGAeoD3Rz2BbLFoP19")
+
+        self.assertEqual(wallet.return_verified_password_or_false(
+            (tstr("5db77aa7aea5ea7d6b4c64dab219972cf4763d4937d3e6e17f580436dcb10d34"), tstr("5db77aa7aea5ea7d6b4c64dab219972cf4763d4937d3e6e17f580436dcb10d35"))), (False, 2))
+        self.assertEqual(wallet.return_verified_password_or_false(
+            (tstr("5db77aa7aea5ea7d6b4c64dab219972cf4763d4937d3e6e17f580436dcb10d36"), correct_pw, tstr("5db77aa7aea5ea7d6b4c64dab219972cf4763d4937d3e6e17f580436dcb10d37"))), (correct_pw, 2))
+
 
 # QuickTests: all of Test01Basics, Test02Anchors, Test03WildCards, and Test04Typos,
 # all of Test05CommandLine except the "large" tests, and select quick tests from

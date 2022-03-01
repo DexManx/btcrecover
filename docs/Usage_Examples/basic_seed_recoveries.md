@@ -74,4 +74,24 @@ Seed from Yoroi, Adalite or Daedalus (Working as a software wallet), using a sta
 ```
 python seedrecover.py --wallet-type cardano --addrs stake1uxztdzzm4ljw9a0qmgregc8efgg56p2h3kj75kc6vmhfj2cyg0jmy --mnemonic "cave table seven there limit fat decorate middle gold ten battle trigger luggage demand"
 ```
+### Basic Tron Recoveries
+One missing word, address generation limit of 1. (So address needs to be in the first account)
+```
+python seedrecover.py --wallet-type tron --addrs TLxkYzNpMCEz5KThVuZzoyjde1UfsJKof6 --mnemonic "have hint welcome skate cinnamon rabbit cable payment gift uncover column duck scissors wedding decorate under marine hurry scrub rapid change roast print arch" --addr-limit 1
+```
 
+### Basic Helium Recoveries
+One missing word
+```
+python seedrecover.py --wallet-type helium --addrs 13hP2Vb1XVcMYrVNdwUW4pF3ZDj8CnET92zzUHqYp7DxxzVASbB --mnemonic "arm hundred female steel describe tip physical weapon peace write advice"
+```
+### Basic Polkadot(Substrate) Recoveries
+One missing word, blank secret derivation path
+```
+python seedrecover.py --wallet-type polkadotsubstrate --addrs 13SsWBQSN6Se72PCaMa6huPXEosRNUXN3316yAycS6rpy3tK --mnemonic "toilet assume drama keen dust warrior stick quote palace imitate music disease"
+```
+
+One missing word, secret derivation path of "//hard/soft///btcr-test-password" The soft/hard derivation path is passed to the program via the --substrate-path argument and the password is treated the same as a passphrase (Without the leading ///)
+```
+python seedrecover.py --wallet-type polkadotsubstrate --addrs 12uMBgecqfkHTYZE4GFRx847CwR7sfs2bTdPbPLpzeMDGFwC --mnemonic "toilet assume drama keen dust warrior stick quote palace imitate music disease" --passphrase-arg btcr-test-password --substrate-path //hard/soft
+```

@@ -157,7 +157,7 @@ The `%d` is a wildcard which is replaced by all combinations of a single digit. 
  * `%ia`   - a “case-insensitive” version of %a: a single lower or uppercase letter
  * `%in`   - a single digit, lower or uppercase letter
  * `%1,2in`- between 1 and 2 characters long of digits, lower or uppercase letters
- * `%[chars]` - exactly 1 of the characters between `[` and `]` (e.g. either a `c`, `h`, `a`, `r`, or `s`)
+ * `%[chars]` - exactly 1 of the characters between `[` and `]` (e.g. either a `c`, `h`, `a`, `r`, or `s`) _**Note**: All characters in this wildcard are used as-is, even if that character would normally have its own wildcard if used as a token, like space, $, % or ^_
  * `%1,3[chars]` - between 1 and 3 of the characters between `[` and `]`
  * `%[0-9a-f]` - exactly 1 of these characters: `0123456789abcdef`
  * `%2i[0-9a-f]` - exactly 2 of these characters: `0123456789abcdefABCDEF`
@@ -173,12 +173,15 @@ The `%d` is a wildcard which is replaced by all combinations of a single digit. 
  * `%Y`    - any single ASCII digit or symbol
  * `%p`    - any single ASCII letter, digit, or symbol
  * `%P`    - any single character from either `%p` or `%W` (pretty much everything)
+ * `%q`    - any single ASCII letter, digit, symbol or space. (The characters typically used for BIP39 passphrase for most vendors) 
  * `%c`    - a single character from a custom set specified at the command line with `--custom-wild characters`
  * `%C`    - an uppercased version of `%c` (the same as `%c` if `%c` has no lowercase letters)
  * `%ic`   - a case-insensitive version of `%c`
  * `%%`    - a single `%` (so that `%`’s in your password aren’t confused as wildcards)
  * `%^`    - a single `^` (so it’s not confused with an anchor if it’s at the beginning of a token)
  * `%S`    - a single `$` (yes, that’s `%` and a capital `S` that gets replaced by a dollar sign, sorry if that’s confusing)
+ * `%h`    - a single hexidcimal character (0-9, A-F) 
+ * `%*`    - a single Base58 character (Bitcoin Base58 Character Set)
 
 Up until now, most of the features help by reducing the number of passwords that need to be tried by exploiting your knowledge of what’s probably in the password. Wildcards significantly expand the number of passwords that need to be tried, so they’re best used in moderation.
 
